@@ -24,10 +24,6 @@ class Card(object):
 
     @staticmethod
     def form_idx(idx, trumpf_color=Color.HEARTS):
-        '''
-        The index idx is "trump corrected" in the sense that the trump is always the first color and then
-        the sequence follows the Color enum sequence
-        '''
         color_idx = idx // 9
         color_idx_trumpf_corrected = (color_idx + trumpf_color.value) % 4
         number = idx - (color_idx * 9) + CARD_OFFSET

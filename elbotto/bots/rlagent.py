@@ -15,23 +15,14 @@ logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.WARNING)
 
 class Mode(Enum):
-    NEW = 0
-    RETRAIN = 1
-    RUN = 2
+    TRAIN = 0
+    RUN = 1
 
 
 REJECT_CARD_REWARD = -1
 MAX_STICH = 9
 SAVE_EPISODES = 1000
 
-def create_training_path(base_path):
-    idx = 0
-    path = os.path.join(base_path, "run_{:03d}".format(idx))
-    while os.path.exists(path):
-        idx += 1
-        path = os.path.join(base_path, "run_{:03d}".format(idx))
-    os.makedirs(path, exist_ok=True)
-    return path
 
 def get_states():
     # 4 * CARDS_PER_COLOR for all played cards
@@ -51,7 +42,7 @@ class Bot(BaseBot):
     """
 
     def __init__(self, server_address, name, chosen_team_index=0, output_path=None, rounds_to_play=1, log=False,
-                 mode=Mode.NEW):
+                 mode=Mode.TRAIN):
         super(Bot, self).__init__(server_address, name, chosen_team_index, rounds_to_play)
 
         self.mode = mode
@@ -60,36 +51,38 @@ class Bot(BaseBot):
         self.played_cards_in_game = []
         self.rejected_cards = []
 
-        if mode is Mode.NEW:
-            output_path = create_training_path(output_path)
-
         if log:
             self.log_game(output_path)
+        model_path = os.path.join(output_path, 'checkpoints')
 
-        if mode is Mode.NEW:
-            self.agent = Agent.create(agent='dqn',
-                                      states=get_states(),
-                                      actions=get_actions(),
-                                      max_episode_timesteps=50,
-                                      memory=10000,
-                                      batch_size=32,
-                                      exploration=0.1,
-                                      network=[
-                                        dict(type='dense', size=128, activation='tanh'),
-                                        dict(type='dense', size=128, activation='tanh'),
-                                        dict(type='dense', size=128, activation='tanh')
-                                      ],
-                                      summarizer=dict(
-                                        directory=os.path.join(output_path, "summary"),
-                                        labels=['entropy', 'kl-divergence', 'loss', 'reward', 'update-norm']
-                                      ),
-                                      saver=dict(
-                                        directory=os.path.join(output_path, "checkpoints"),
-                                        frequency=SAVE_EPISODES  # save checkpoint every 100 updates
-                                      )
-            )
+        if mode is Mode.TRAIN:
+            os.makedirs(output_path, exist_ok=True)
+            if os.path.exists(model_path):
+                self.agent = Agent.load(model_path)
+            else:
+                self.agent = Agent.create(agent='dqn',
+                                          states=get_states(),
+                                          actions=get_actions(),
+                                          max_episode_timesteps=50,
+                                          memory=10000,
+                                          batch_size=32,
+                                          exploration=0.1,
+                                          network=[
+                                            dict(type='dense', size=128, activation='tanh'),
+                                            dict(type='dense', size=128, activation='tanh'),
+                                            dict(type='dense', size=128, activation='tanh')
+                                          ],
+                                          summarizer=dict(
+                                            directory=os.path.join(output_path, "summary"),
+                                            labels=['entropy', 'kl-divergence', 'loss', 'reward', 'update-norm']
+                                          ),
+                                          saver=dict(
+                                            directory=os.path.join(output_path, "checkpoints"),
+                                            frequency=SAVE_EPISODES  # save checkpoint every 100 updates
+                                          )
+                )
         else:
-            self.agent = Agent.load(os.path.join(output_path, "checkpoints"))
+            self.agent = Agent.load(model_path)
 
 
     def handle_request_trumpf(self):
@@ -100,8 +93,8 @@ class Bot(BaseBot):
         return GameType("TRUMPF", most_common_color.name)
 
     def handle_reject_card(self, card):
-        if self.mode is not Mode.RUN:
-            logger.warning('Reject reward {} for bot {}'.format(REJECT_CARD_REWARD, self.name))
+        if self.mode is Mode.TRAIN:
+            logger.warning('Reject reward {} for bot {} due to card {}'.format(REJECT_CARD_REWARD, self.name, card))
             self.agent.observe(reward=REJECT_CARD_REWARD, terminal=False)
 
         self.rejected_cards.append(card)
@@ -139,7 +132,7 @@ class Bot(BaseBot):
     def handle_stich(self, winner, round_points, total_points):
         self.rejected_cards = []
         self.stich_number += 1
-        if self.mode is not Mode.RUN:
+        if self.mode is Mode.TRAIN:
             if self.in_my_team(winner):
                 reward = round_points / (self.get_trumpf_factor() * 56)
             else:
