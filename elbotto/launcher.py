@@ -9,11 +9,12 @@ DEFAULT_BOT_NAME = "El botto del jasso"
 
 DEFAULT_SERVER_NAME = "ws://127.0.0.1:3000"
 
-MODEL_SAVE_PATH = "/Users/joak/workspace/jass/elbotto/dqnagent/"
+MODEL_SAVE_PATH = "../dqnagent/"
 
 def launch(bot_name=DEFAULT_BOT_NAME, server_address=DEFAULT_SERVER_NAME):
-    bot = stochastic.Bot(server_address, bot_name)
-    #bot = rlagent.Bot(server_address, bot_name, MODEL_SAVE_PATH, save_episodes=100)
+    #bot = stochastic.Bot(server_address, bot_name)
+    bot = rlagent.Bot(server_address, bot_name, MODEL_SAVE_PATH, rounds_to_play=1)
+    bot.start()
 
 if __name__ == '__main__':
     launch()

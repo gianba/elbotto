@@ -23,10 +23,15 @@ class Card(object):
         return Card(number, color)
 
     @staticmethod
-    def form_idx(idx):
+    def form_idx(idx, trumpf_color=Color.HEARTS):
+        '''
+        The index idx is "trump corrected" in the sense that the trump is always the first color and then
+        the sequence follows the Color enum sequence
+        '''
         color_idx = idx // 9
+        color_idx_trumpf_corrected = (color_idx + trumpf_color.value) % 4
         number = idx - (color_idx * 9) + CARD_OFFSET
-        color = Color(color_idx)
+        color = Color(color_idx_trumpf_corrected)
         return Card.create(number, color.name)
 
     def to_dict(self):

@@ -21,7 +21,8 @@ class Connection(object):
         self.server_address = server_address
         self.bot = bot
 
-    def on_message(self, ws, event):
+    def on_message(self, event):
+
         logger.debug("Received message %s", event)
         payload = json.loads(event)
         type = payload["type"]

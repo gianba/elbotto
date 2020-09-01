@@ -8,7 +8,6 @@ from elbotto.messages import MessageType, GameType
 
 logger = logging.getLogger(__name__)
 
-
 class SessionType(Enum):
     TOURNAMENT = "TOURNAMENT"
     SINGLE_GAME = "SINGLE_GAME"
@@ -28,7 +27,7 @@ class BaseBot(object):
 
     connection = None
 
-    def __init__(self, server_address, name, chosen_team_index=0):
+    def __init__(self, server_address, name, chosen_team_index=0, rounds_to_play=1):
         self.name = name
         self.session_name = name
         self.server_address = server_address
@@ -37,11 +36,19 @@ class BaseBot(object):
         self.teams = None
         self.handCards= []
         self.won_stich_in_game = []
-        self.last_round_points = 0
+        self.last_round_points = [0, 0]
+        self.rounds_to_play = rounds_to_play
+        self.log = False
+
+
+    def log_game(self, path):
+        logging.basicConfig(filename=path + '/game.log', level=logging.WARNING)
+        self.log = True
 
     def start(self):
         logger.info("Connecting to %s", self.server_address)
-        Connection.create(self.server_address, self)
+        for _ in range(self.rounds_to_play):
+            Connection.create(self.server_address, self)
 
     def handle_message(self, message):
         answer = None
@@ -72,14 +79,20 @@ class BaseBot(object):
             logger.info('session choice answer: %s', answer)
             
         elif message_type == MessageType.DEAL_CARDS:
-            self.last_round_points = 0
+            if self.log:
+                logger.warning(message)
+            self.last_round_points = [0, 0]
             self.handCards = data
 
         elif message_type == MessageType.REQUEST_TRUMPF:
+            if self.log:
+                logger.warning(message)
             game_type = self.handle_request_trumpf()
             answer = messages.create(MessageType.CHOOSE_TRUMPF, game_type)
             
         elif message_type == MessageType.REQUEST_CARD:
+            if self.log:
+                logger.warning(message)
             card = self.handle_request_card(data)
             answer = messages.create(MessageType.CHOOSE_CARD, card)
             
@@ -87,9 +100,13 @@ class BaseBot(object):
             self.handle_played_cards(data)
             
         elif message_type == MessageType.REJECT_CARD:
+            if self.log:
+                logger.warning(message)
             self.handle_reject_card(data)
             
         elif message_type == MessageType.BROADCAST_GAME_FINISHED:
+            if self.log:
+                logger.warning(message)
             self.handle_game_finished()
             self.won_stich_in_game = []
 
@@ -101,18 +118,18 @@ class BaseBot(object):
             self.players_in_session = data["playersInSession"]
 
         elif message_type == MessageType.BROADCAST_STICH:
+            if self.log:
+                logger.warning(message)
             winner = data["winner"]
             won_stich = self.in_my_team(winner)
+            winning_team = self.get_winning_team(winner)
             self.won_stich_in_game.append(won_stich)
             total_points = self.total_points(data["score"])
-            current_game_points = self.current_game_points(data["score"])
+            current_game_points = self.current_game_points(data["score"], winning_team)
+            winner_idx = 0 if won_stich else 1
+            round_points = current_game_points - self.last_round_points[winner_idx]
 
-            if won_stich:
-                round_points = current_game_points - self.last_round_points
-            else:
-                round_points = 0
-
-            self.last_round_points = current_game_points
+            self.last_round_points[winner_idx] = current_game_points
             self.handle_stich(winner, round_points, total_points)
 
         elif message_type == MessageType.BROADCAST_TOURNAMENT_STARTED:
@@ -128,6 +145,8 @@ class BaseBot(object):
                     self.my_team = team
 
         elif message_type == MessageType.BROADCAST_TRUMPF:
+            if self.log:
+                logger.warning(message)
             self.handle_trumpf(data)
 
         elif message_type == MessageType.BROADCAST_WINNER_TEAM:
@@ -156,7 +175,7 @@ class BaseBot(object):
         pass
 
     def handle_game_finished(self):
-        self.last_round_points = 0
+        self.last_round_points = [0, 0]
         pass
 
     def handle_reject_card(self, data):
@@ -176,9 +195,15 @@ class BaseBot(object):
         return self.my_team.is_member(winner)
         # return self.player == winner
 
-    def current_game_points(self, scores):
+    def get_winning_team(self, player):
+        for team in self.teams:
+            if team.is_member(player):
+                return team
+        return None
+
+    def current_game_points(self, scores, winning_team):
         for score in scores:
-            if self.my_team.name == score.team_name:
+            if winning_team.name == score.team_name:
                 return score.current_game_points
 
         return 0

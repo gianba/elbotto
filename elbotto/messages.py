@@ -28,6 +28,9 @@ class RoundScore(object):
         self.total_points = points
         self.current_game_points = currentRoundPoints
 
+    def __repr__(self):
+        return "Team {} | current: {} total: {}".format(self.team_name, self.current_game_points, self.total_points)
+
 
 class Team(object):
 
@@ -177,7 +180,7 @@ def createPlayedCards(playedCards):
 def createRequestCard(cards):
     return dict(
         type = MessageType.REQUEST_CARD,
-        data = cards
+        data = [Card.create(item["number"], item["color"]) for item in cards]
     )
 
 def createChooseCard(card):

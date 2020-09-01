@@ -12,11 +12,9 @@ class Bot(BaseBot):
     This is a simple port of the original Java Script implementation
     """
 
-    def __init__(self, server_address, name, chosen_team_index=0):
-        super(Bot, self).__init__(server_address, name, chosen_team_index)
+    def __init__(self, server_address, name, chosen_team_index=0, output_path=None, rounds_to_play=1):
+        super(Bot, self).__init__(server_address, name, chosen_team_index, rounds_to_play)
         self.game_strategy = PlayStrategy()
-
-        self.start()
 
     def handle_request_trumpf(self):
         # CHALLENGE2017: Ask the brain which gameMode to choose

@@ -1,11 +1,9 @@
 import os
 import logging
+from enum import Enum
 from collections import Counter
 
-import tensorflow as tf
-from tensorforce import Configuration
-from tensorforce.agents import DQNAgent
-from tensorforce.core.networks import layered_network_builder
+from tensorforce.agents import Agent
 
 import numpy as np
 
@@ -14,7 +12,17 @@ from elbotto.card import Card, Color, CARD_OFFSET, CARDS_PER_COLOR
 from elbotto.messages import GameType
 
 logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.WARNING)
 
+class Mode(Enum):
+    NEW = 0
+    RETRAIN = 1
+    RUN = 2
+
+
+REJECT_CARD_REWARD = -1
+MAX_STICH = 9
+SAVE_EPISODES = 1000
 
 def create_training_path(base_path):
     idx = 0
@@ -22,117 +30,67 @@ def create_training_path(base_path):
     while os.path.exists(path):
         idx += 1
         path = os.path.join(base_path, "run_{:03d}".format(idx))
+    os.makedirs(path, exist_ok=True)
     return path
 
+def get_states():
+    # 4 * CARDS_PER_COLOR for all played cards
+    # 4 * CARDS_PER_COLOR for cards on the table
+    # 4 * CARDS_PER_COLOR for the current hand
+    # 4 currently played color
+    # todo: add 3 states for "potentially still has trump"
+    return dict(type='float', shape=12*CARDS_PER_COLOR + 4)
 
-REJECT_CARD_REWARD = -1
-
-INVALID_CARD_REWARD = REJECT_CARD_REWARD
-
-MAX_STICH = 9
-
-MAX_STICH_POINTS = 256
-
-states = dict(shape=(8 * (CARDS_PER_COLOR + 1)), type='float')
-
-actions=dict(continuous=False, num_actions=36)
-
-def load_network():
-    layers = [
-        # dict(type='dense', size=64),
-        dict(type='dense', size=128),
-        dict(type='dense', size=128),
-        dict(type='lstm'),
-    ]
-    network = layered_network_builder(layers_config=layers)
-    return network
-
-
-def load_dqn_config(summary_output_path):
-    config = Configuration(
-        states = states,
-        actions = actions,
-        network = load_network(),
-
-        preprocessing=None,
-        exploration= dict(
-            type= "epsilon_decay",
-            epsilon= 1.0,
-            epsilon_final= 0.1,
-            epsilon_timesteps= 1e6
-        ),
-        reward_preprocessing=#None,
-        [
-            dict(
-                type= "clip",
-                min= -1,
-                max= 1
-            )
-        ],
-        batch_size= 32,
-        memory_capacity= 10000,
-        memory= dict(
-            type= "replay",
-            random_sampling= False
-        ),
-        update_frequency= 4,
-        first_update= 50000,
-        repeat_update= 1,
-
-        target_update_frequency= 10000,
-
-        discount= 0.99,
-        learning_rate= 0.00025,
-        optimizer= dict(
-            type= "rmsprop",
-            momentum= 0.95,
-            epsilon= 0.01
-        ),
-        tf_saver= True,
-        tf_summary=summary_output_path,
-        tf_summary_level=3,
-        log_level= "info",
-
-        update_target_weight= 1.0,
-        double_dqn= True,
-        clip_loss= 0.0
-    )
-    return config
-
-
-def load_agent(summary_output_path):
-    config = load_dqn_config(summary_output_path)
-    agent = DQNAgent(config=config)
-    return agent
-
+def get_actions():
+    return dict(type='int', shape=(), num_values=4 * CARDS_PER_COLOR)
 
 class Bot(BaseBot):
+    """
+    Trivial bot using DEFAULT_TRUMPF and randomly returning a card available in the hand.
+    This is a simple port of the original Java Script implementation
+    """
 
-    def __init__(self, server_address, name, output_path, training=True, save_episodes=None, chosen_team_index=0):
-        super(Bot, self).__init__(server_address, name, chosen_team_index)
+    def __init__(self, server_address, name, chosen_team_index=0, output_path=None, rounds_to_play=1, log=False,
+                 mode=Mode.NEW):
+        super(Bot, self).__init__(server_address, name, chosen_team_index, rounds_to_play)
 
-        output_path = create_training_path(output_path)
-
-        self.model_save_path = os.path.join(output_path, "model")
-        self.save_episodes = save_episodes
-        self.training = training
+        self.mode = mode
         self.episode = 1
-        self.episode_reward = 0
         self.stich_number = 0
-
         self.played_cards_in_game = []
+        self.rejected_cards = []
 
-        logger.info("Summay output path %s", output_path)
+        if mode is Mode.NEW:
+            output_path = create_training_path(output_path)
 
-        self.agent = load_agent(output_path)
+        if log:
+            self.log_game(output_path)
 
-        if not self.training:
-            self.agent.load_model(output_path)
+        if mode is Mode.NEW:
+            self.agent = Agent.create(agent='dqn',
+                                      states=get_states(),
+                                      actions=get_actions(),
+                                      max_episode_timesteps=50,
+                                      memory=10000,
+                                      batch_size=32,
+                                      exploration=0.1,
+                                      network=[
+                                        dict(type='dense', size=128, activation='tanh'),
+                                        dict(type='dense', size=128, activation='tanh'),
+                                        dict(type='dense', size=128, activation='tanh')
+                                      ],
+                                      summarizer=dict(
+                                        directory=os.path.join(output_path, "summary"),
+                                        labels=['entropy', 'kl-divergence', 'loss', 'reward', 'update-norm']
+                                      ),
+                                      saver=dict(
+                                        directory=os.path.join(output_path, "checkpoints"),
+                                        frequency=SAVE_EPISODES  # save checkpoint every 100 updates
+                                      )
+            )
+        else:
+            self.agent = Agent.load(os.path.join(output_path, "checkpoints"))
 
-        self.winning_rate_node = tf.placeholder(tf.float32, name='winning-rate-placeholder')
-        self.winning_rate_summary = tf.summary.scalar('winning-rate', self.winning_rate_node)
-
-        self.start()
 
     def handle_request_trumpf(self):
         cnt = Counter()
@@ -140,6 +98,36 @@ class Bot(BaseBot):
             cnt[card.color] += 1
         most_common_color = cnt.most_common(1)[0][0]
         return GameType("TRUMPF", most_common_color.name)
+
+    def handle_reject_card(self, card):
+        if self.mode is not Mode.RUN:
+            logger.warning('Reject reward {} for bot {}'.format(REJECT_CARD_REWARD, self.name))
+            self.agent.observe(reward=REJECT_CARD_REWARD, terminal=False)
+
+        self.rejected_cards.append(card)
+
+    def handle_request_card(self, tableCards):
+        state = self._build_state(tableCards)
+        exploit = (self.mode is Mode.RUN)
+        action = self.agent.act(states=state, deterministic=exploit, independent=exploit)
+        card = self._convert_action_to_card(action)
+
+        assert(card is not None)
+
+        return card
+
+    def _convert_action_to_card(self, action):
+        card = Card.form_idx(int(action), self.game_type.trumpf_color)
+        for hard_card in self.handCards:
+            if card == hard_card:
+                return card
+
+        return None
+
+    def handle_game_finished(self):
+        self.episode += 1
+        self.stich_number = 0
+        self.played_cards_in_game = []
 
     def handle_played_cards(self, played_cards):
         super(Bot, self).handle_played_cards(played_cards)
@@ -149,101 +137,43 @@ class Bot(BaseBot):
                 self.played_cards_in_game.append(card)
 
     def handle_stich(self, winner, round_points, total_points):
+        self.rejected_cards = []
         self.stich_number += 1
-        won_stich = self.in_my_team(winner)
-        # logger.info("%s: %s, %s, %s", self.episode, self.name, winner, won_stich)
-        reward = round_points / MAX_STICH_POINTS
-        self.episode_reward += reward
-
-        logger.debug("Stich: Won:%s, Winner: %s, Round points: %s, episode_reward: %s", won_stich, winner.name, round_points, self.episode_reward)
-
-        if self.training:
+        if self.mode is not Mode.RUN:
+            if self.in_my_team(winner):
+                reward = round_points / (self.get_trumpf_factor() * 56)
+            else:
+                reward = -round_points / (self.get_trumpf_factor() * 56)
             self.agent.observe(reward=reward, terminal=self.stich_number==MAX_STICH)
 
-    def handle_reject_card(self, card):
-        # logger.warning(" ######   SERVER REJECTED CARD   #######")
-
-        reward = REJECT_CARD_REWARD
-
-        if self.training:
-            self.agent.observe(reward=reward, terminal=False)
-
-        self.episode_reward += reward
-
-    def handle_request_card(self, tableCards):
-        state = self._build_state()
-        action = self.agent.act(state=state, deterministic = not self.training)
-        card = self._convert_action_to_card(action)
-
-        while card is None:
-            if self.training:
-                self.agent.observe(reward=INVALID_CARD_REWARD, terminal=False)
-
-            action = self.agent.act(state=state, deterministic = not self.training)
-            card = self._convert_action_to_card(action)
-
-        return card
-
-    def handle_game_finished(self):
-        if self.model_save_path and self.save_episodes is not None and self.episode % self.save_episodes == 0:
-            logger.info("Saving agent after episode {}".format(self.episode))
-            logger.info("Model saved to: %s", self.model_save_path)
-            self.agent.save_model(self.model_save_path)
-
-        winning_rate = sum(self.won_stich_in_game) / len(self.won_stich_in_game)
-
-        session = self.agent.model.session
-        winning_rate_summary = session.run(self.winning_rate_summary,
-                                          feed_dict={self.winning_rate_node: winning_rate})
-        self.agent.model.writer.add_summary(winning_rate_summary, global_step=self.episode)
-
-
-        logger.info("Episode %s, stich %s/%s, episode reward: %s"%(
-            self.episode,
-            sum(self.won_stich_in_game),
-            len(self.won_stich_in_game),
-            self.episode_reward))
-
-        self.agent.observe_episode_reward(self.episode_reward)
-        self.episode += 1
-        self.episode_reward = 0
-        self.stich_number = 0
-        self.played_cards_in_game = []
-
-    def _convert_action_to_card(self, action):
-        card = Card.form_idx(int(action))
-        for hard_card in self.handCards:
-            if card == hard_card:
-                return card
-
-        return None
-
-    # def _build_state(self):
-    #     order = {self.game_type.trumpf_color: 0}
-    #     for color in Color:
-    #         if color != self.game_type.trumpf_color:
-    #             order[color] = len(order)
-    #
-    #     state = np.zeros((4, CARDS_PER_COLOR), dtype=np.float32)
-    #     for card in self.played_cards_in_game:
-    #         state[order[card.color], card.number - CARD_OFFSET] = 1.0
-    #
-    #     return state.flatten()
-
-    def _build_state(self):
+    def _build_state(self, tableCards):
         order = {}
         for color in Color:
-            order[color] = len(order)
+            order[color] = (color.value - self.game_type.trumpf_color.value) % 4
 
-        state = np.zeros((8, CARDS_PER_COLOR + 1), dtype=np.float32)
-
-        state[order[self.game_type.trumpf_color], 0] = 1.0
+        state = np.zeros((12, CARDS_PER_COLOR), dtype=np.float)
+        action_mask = np.zeros((4, CARDS_PER_COLOR), dtype=np.float)
 
         for card in self.played_cards_in_game:
-            state[order[card.color], 1 + card.number - CARD_OFFSET] = 1.0
+            state[order[card.color], card.number - CARD_OFFSET] = 1.0
+
+        for card in tableCards:
+            state[4 + order[card.color], card.number - CARD_OFFSET] = 1.0
 
         for card in self.handCards:
-            state[4 + order[card.color], 1 + card.number - CARD_OFFSET] = 1.0
+            state[8 + order[card.color], card.number - CARD_OFFSET] = 1.0
+            if card not in self.rejected_cards:
+                action_mask[order[card.color], card.number - CARD_OFFSET] = 1.0
 
-        return state.flatten()
+        played_color = np.zeros(4, dtype=np.float)
+        if len(self.handCards) >= 1:
+            played_color[order[self.handCards[0].color]] = 1.0
+
+        return dict(state=np.append(state.flatten(), played_color), action_mask=action_mask.flatten())
+
+    def get_trumpf_factor(self):
+        factor = 1 if self.game_type.trumpf_color in [Color.HEARTS, Color.DIAMONDS] else 2
+        return factor
+
+
 
