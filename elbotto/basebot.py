@@ -66,7 +66,6 @@ class BaseBot(object):
 
         if message_type == MessageType.REQUEST_PLAYER_NAME:
             #CHALLENGE2017: Respond with your BotName
-            logger.info('MyName: ' + self.name)
             answer = messages.create(MessageType.CHOOSE_PLAYER_NAME, self.name)
             
         elif message_type == MessageType.REQUEST_SESSION_CHOICE:
@@ -76,7 +75,6 @@ class BaseBot(object):
                                      SessionType.SINGLE_GAME.name,
                                      False,
                                      self.chosen_team_index)
-            logger.info('session choice answer: %s', answer)
             
         elif message_type == MessageType.DEAL_CARDS:
             if self.log:
@@ -150,7 +148,7 @@ class BaseBot(object):
             self.handle_trumpf(data)
 
         elif message_type == MessageType.BROADCAST_WINNER_TEAM:
-            #Do nothing with that :-)
+            self.handle_winner_team(message)
             pass
         else:
             logger.warning("Sorry, i cannot handle this message: " + json.dumps(message))
@@ -190,6 +188,10 @@ class BaseBot(object):
         # CHALLENGE2017: Ask the brain which card to choose
         card = self.handCards[0]
         return card
+
+    def handle_winner_team(self, data):
+        # Do nothing with that :-)
+        pass
 
     def in_my_team(self, winner):
         return self.my_team.is_member(winner)

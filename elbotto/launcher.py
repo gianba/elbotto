@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO,
 DEFAULT_SERVER_NAME = "ws://cs:3000"
 # DEFAULT_SERVER_NAME = "ws://127.0.0.1:3000"
 MODEL_SAVE_PATH = "../dqnagent/"
-DEFAULT_ROUNDS_TO_PLAY = 10000
+DEFAULT_ROUNDS_TO_PLAY = 20000
 
 def launch_rl(bot_name, chosen_team_index, server_address=DEFAULT_SERVER_NAME, rounds_to_play=DEFAULT_ROUNDS_TO_PLAY,
            log=False, mode=rlagent.Mode.RUN):

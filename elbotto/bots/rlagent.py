@@ -50,6 +50,8 @@ class Bot(BaseBot):
         self.stich_number = 0
         self.played_cards_in_game = []
         self.rejected_cards = []
+        self.stich_reward = 0
+        self.rejected_per_session = 0
 
         if log:
             self.log_game(output_path)
@@ -94,10 +96,12 @@ class Bot(BaseBot):
 
     def handle_reject_card(self, card):
         if self.mode is Mode.TRAIN:
-            logger.warning('Reject reward {} for bot {} due to card {}'.format(REJECT_CARD_REWARD, self.name, card))
+            if self.log:
+                logger.warning('Reject reward {} for bot {} due to card {}'.format(REJECT_CARD_REWARD, self.name, card))
             self.agent.observe(reward=REJECT_CARD_REWARD, terminal=False)
 
         self.rejected_cards.append(card)
+        self.rejected_per_session += 1
 
     def handle_request_card(self, tableCards):
         state = self._build_state(tableCards)
@@ -132,12 +136,17 @@ class Bot(BaseBot):
     def handle_stich(self, winner, round_points, total_points):
         self.rejected_cards = []
         self.stich_number += 1
+        if self.in_my_team(winner):
+            reward = round_points / (self.get_trumpf_factor() * 56)
+        else:
+            reward = -round_points / (self.get_trumpf_factor() * 56)
         if self.mode is Mode.TRAIN:
-            if self.in_my_team(winner):
-                reward = round_points / (self.get_trumpf_factor() * 56)
-            else:
-                reward = -round_points / (self.get_trumpf_factor() * 56)
             self.agent.observe(reward=reward, terminal=self.stich_number==MAX_STICH)
+        self.stich_reward = 0.9999 * self.stich_reward + 0.0001 * reward
+
+    def handle_winner_team(self, data):
+        logger.info('Average stich reward: {} and {} rejected cards in this session'.format(self.stich_reward, self.rejected_per_session))
+        self.rejected_per_session = 0
 
     def _build_state(self, tableCards):
         order = {}
@@ -159,8 +168,8 @@ class Bot(BaseBot):
                 action_mask[order[card.color], card.number - CARD_OFFSET] = 1.0
 
         played_color = np.zeros(4, dtype=np.float)
-        if len(self.handCards) >= 1:
-            played_color[order[self.handCards[0].color]] = 1.0
+        if len(tableCards) >= 1:
+            played_color[order[tableCards[0].color]] = 1.0
 
         return dict(state=np.append(state.flatten(), played_color), action_mask=action_mask.flatten())
 
