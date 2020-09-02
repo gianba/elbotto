@@ -34,20 +34,21 @@ def start_bots():
     #                               rounds_to_play=ROUNDS_TO_PLAY,
     #                               mode=rlagent.Mode.NEW)).start()
 
+
     create_bot_thread(rlagent.Bot(DEFAULT_SERVER_NAME,
                                   name="El botto del jasso 0",
                                   chosen_team_index=0,
-                                  output_path=OUTPUT_PATH + "bot0/",
+                                  output_path=OUTPUT_PATH,
                                   rounds_to_play=ROUNDS_TO_PLAY,
-                                  log=True,
-                                  mode=rlagent.Mode.NEW)).start()
+                                  log=False,
+                                  mode=rlagent.Mode.TRAIN)).start()
 
     create_bot_thread(rlagent.Bot(DEFAULT_SERVER_NAME,
                                   name="El botto del jasso 1",
                                   chosen_team_index=0,
-                                  output_path=OUTPUT_PATH + "bot1",
+                                  output_path=OUTPUT_PATH,
                                   rounds_to_play=ROUNDS_TO_PLAY,
-                                  mode=rlagent.Mode.NEW)).start()
+                                  mode=rlagent.Mode.TRAIN)).start()
 
     # create_bot_thread(rlagent.Bot(DEFAULT_SERVER_NAME,
     #                               name="El botto del jasso 2",

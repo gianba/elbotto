@@ -29,8 +29,10 @@ def get_states():
     # 4 * CARDS_PER_COLOR for cards on the table
     # 4 * CARDS_PER_COLOR for the current hand
     # 4 currently played color
-    # todo: add 3 states for "potentially still has trump"
-    return dict(type='float', shape=12*CARDS_PER_COLOR + 4)
+    # 3 * 4 states for "potentially still has trump / other colors"
+    # 4 states for "who starts"
+    # todo: add 4 states for "who owns current stich"
+    return dict(type='float', shape=12*CARDS_PER_COLOR + 5 * 4)
 
 def get_actions():
     return dict(type='int', shape=(), num_values=4 * CARDS_PER_COLOR)
@@ -50,8 +52,12 @@ class Bot(BaseBot):
         self.stich_number = 0
         self.played_cards_in_game = []
         self.rejected_cards = []
-        self.stich_reward = 0
+
+        self.out_of_color = np.zeros((3, 4), dtype=np.float)
+
+        self.avg_stich_reward = 0
         self.rejected_per_session = 0
+        self.avg_rejected_per_session = 0
 
         if log:
             self.log_game(output_path)
@@ -74,6 +80,8 @@ class Bot(BaseBot):
                                             dict(type='dense', size=128, activation='tanh'),
                                             dict(type='dense', size=128, activation='tanh')
                                           ],
+                                          # l2_regularization=0.2,
+                                          discount=1.0,
                                           summarizer=dict(
                                             directory=os.path.join(output_path, "summary"),
                                             labels=['entropy', 'kl-divergence', 'loss', 'reward', 'update-norm']
@@ -109,12 +117,10 @@ class Bot(BaseBot):
         action = self.agent.act(states=state, deterministic=exploit, independent=exploit)
         card = self._convert_action_to_card(action)
 
-        assert(card is not None)
-
         return card
 
     def _convert_action_to_card(self, action):
-        card = Card.form_idx(int(action), self.game_type.trumpf_color)
+        card = Card.from_idx(int(action), self.game_type.trumpf_color)
         for hard_card in self.handCards:
             if card == hard_card:
                 return card
@@ -125,6 +131,7 @@ class Bot(BaseBot):
         self.episode += 1
         self.stich_number = 0
         self.played_cards_in_game = []
+        self.out_of_color = np.zeros((3, 4), dtype=np.float)
 
     def handle_played_cards(self, played_cards):
         super(Bot, self).handle_played_cards(played_cards)
@@ -133,7 +140,7 @@ class Bot(BaseBot):
             if card not in self.played_cards_in_game:
                 self.played_cards_in_game.append(card)
 
-    def handle_stich(self, winner, round_points, total_points):
+    def handle_stich(self, winner, round_points, total_points, played_cards, seat_id):
         self.rejected_cards = []
         self.stich_number += 1
         if self.in_my_team(winner):
@@ -142,10 +149,21 @@ class Bot(BaseBot):
             reward = -round_points / (self.get_trumpf_factor() * 56)
         if self.mode is Mode.TRAIN:
             self.agent.observe(reward=reward, terminal=self.stich_number==MAX_STICH)
-        self.stich_reward = 0.9999 * self.stich_reward + 0.0001 * reward
+        self.avg_stich_reward = 0.9999 * self.avg_stich_reward + 0.0001 * reward
+
+        self.check_out_of_color(played_cards, seat_id)
+
+    def check_out_of_color(self, played_cards, seat_id):
+        stich_color_id = Card.id_from_color(played_cards[0].color)
+        for i, seat in enumerate(range(seat_id+1, seat_id+4)):  # iterate over all seats
+            seat_cor = (seat - self.player.seatId) % 4
+            if seat_cor != 0:     # don't track out-of-color the player himself
+                if played_cards[0].color is not played_cards[i].color and played_cards[i].color is not self.game_type.trumpf_color:
+                    self.out_of_color[seat_cor-1, stich_color_id] = 1
 
     def handle_winner_team(self, data):
-        logger.info('Average stich reward: {} and {} rejected cards in this session'.format(self.stich_reward, self.rejected_per_session))
+        self.avg_rejected_per_session = 0.99 * self.avg_rejected_per_session + 0.01 * self.rejected_per_session
+        logger.info('Average stich reward: {:.5f} and {} (avg: {:.2f}) rejected cards in this session'.format(self.avg_stich_reward, self.rejected_per_session, self.avg_rejected_per_session))
         self.rejected_per_session = 0
 
     def _build_state(self, tableCards):
@@ -167,11 +185,15 @@ class Bot(BaseBot):
             if card not in self.rejected_cards:
                 action_mask[order[card.color], card.number - CARD_OFFSET] = 1.0
 
-        played_color = np.zeros(4, dtype=np.float)
+        played_color = np.zeros((4, 2), dtype=np.float)
         if len(tableCards) >= 1:
-            played_color[order[tableCards[0].color]] = 1.0
+            played_color[order[tableCards[0].color], 0] = 1.0
+        played_color[len(tableCards), 1] = 1.0
 
-        return dict(state=np.append(state.flatten(), played_color), action_mask=action_mask.flatten())
+        return dict(state=np.concatenate((state.flatten(),
+                                         played_color.flatten(),
+                                         self.out_of_color.flatten())),
+                    action_mask=action_mask.flatten())
 
     def get_trumpf_factor(self):
         factor = 1 if self.game_type.trumpf_color in [Color.HEARTS, Color.DIAMONDS] else 2

@@ -23,12 +23,16 @@ class Card(object):
         return Card(number, color)
 
     @staticmethod
-    def form_idx(idx, trumpf_color=Color.HEARTS):
+    def from_idx(idx, trumpf_color=Color.HEARTS):
         color_idx = idx // 9
         color_idx_trumpf_corrected = (color_idx + trumpf_color.value) % 4
         number = idx - (color_idx * 9) + CARD_OFFSET
         color = Color(color_idx_trumpf_corrected)
         return Card.create(number, color.name)
+
+    @staticmethod
+    def id_from_color(color, trumpf_color=Color.HEARTS):
+        return (color.value - trumpf_color.value) % 4
 
     def to_dict(self):
         return dict(number=self.number,

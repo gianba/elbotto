@@ -128,7 +128,7 @@ class BaseBot(object):
             round_points = current_game_points - self.last_round_points[winner_idx]
 
             self.last_round_points[winner_idx] = current_game_points
-            self.handle_stich(winner, round_points, total_points)
+            self.handle_stich(winner, round_points, total_points, data['playedCards'], data['winner'].seatId)
 
         elif message_type == MessageType.BROADCAST_TOURNAMENT_STARTED:
             #Do nothing with that :-)
@@ -168,7 +168,7 @@ class BaseBot(object):
         self.geschoben = game_type.mode == "SCHIEBE"  # just remember if it's a geschoben match
         self.game_type = game_type
 
-    def handle_stich(self, winner, round_points, total_points):
+    def handle_stich(self, winner, round_points, total_points, playedCards, seatId):
         # Do nothing with that :-)
         pass
 
