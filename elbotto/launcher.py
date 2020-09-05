@@ -44,9 +44,10 @@ if __name__ == '__main__':
                     help="logging", required=False, default='False')
     ap.add_argument("-m", "--mode", required=True,
                     help="TRAIN or RUN mode")
+    ap.add_argument("-s", "--server_address", required=False, default=DEFAULT_SERVER_NAME)
     args = vars(ap.parse_args())
 
     if (args['reinforcement_learning'] == 'True'):
-        launch_rl(args['name'], args['team_index'], rounds_to_play=args['rounds_to_play'], log=(args['log']=='True'), mode=rlagent.Mode[args['mode']])
+        launch_rl(args['name'], args['team_index'], rounds_to_play=args['rounds_to_play'], log=(args['log']=='True'), mode=rlagent.Mode[args['mode']], server_address=args['server_address'])
     else:
-        launch_stoc(args['name'], args['team_index'], rounds_to_play=args['rounds_to_play'])
+        launch_stoc(args['name'], args['team_index'], rounds_to_play=args['rounds_to_play'], server_address=args['server_address'])
