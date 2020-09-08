@@ -32,7 +32,10 @@ def get_states():
     # 3 * 4 states for "potentially still has trump / other colors"
     # 4 states for "who starts"
     # 2 states for "who owns current stich"
-    return dict(type='float', shape=12*CARDS_PER_COLOR + 5 * 4 + 2)
+    return dict(
+        cards=dict(type='float', shape=(4*CARDS_PER_COLOR, 3)),
+        features=dict(type='float', shape=5 * 4 + 2)
+    )
 
 def get_actions():
     return dict(type='int', shape=(), num_values=4 * CARDS_PER_COLOR)
@@ -74,20 +77,34 @@ class Bot(BaseBot):
                                           max_episode_timesteps=50,
                                           memory=20000,
                                           batch_size=32,
+                                          start_updating=8192,
                                           exploration=0.1,
                                           network=[
+                                              [dict(type='retrieve', tensors=['cards']),
+                                               dict(type='conv1d', size=128, window=9, stride=9, padding='valid'),
+                                               dict(type='flatten'),
+                                               dict(type='register', tensor='cards-embedding')],
+                                              [dict(type='retrieve', tensors=['features']),
+                                               dict(type='dense', size=64, activation='relu'),
+                                               dict(type='register', tensor='features-embedding')],
+                                              [dict(type='retrieve', aggregation='concat',
+                                                    tensors=['cards-embedding', 'features-embedding']
+                                               ),
+                                               dict(type='dense', size=512, activation='tanh'),
+                                               dict(type='dense', size=256, activation='tanh'),
+                                               dict(type='dense', size=256, activation='tanh')]
                                             # dict(type='dense', size=256, activation='tanh'),
                                             # dict(type='dense', size=256, activation='tanh'),
                                             # dict(type='dense', size=128, activation='tanh'),
                                             # dict(type='dense', size=128, activation='tanh')
-                                            dict(type='dense', size=512, activation='relu'),
+                                            # dict(type='dense', size=512, activation='relu'),
                                             # dict(type='dropout', rate=0.2),
-                                            dict(type='dense', size=512, activation='relu'),
+                                            # dict(type='dense', size=512, activation='relu'),
                                             # dict(type='dropout', rate=0.2),
-                                            dict(type='dense', size=256, activation='relu'),
+                                            # dict(type='dense', size=256, activation='relu'),
                                             # dict(type='dropout', rate=0.2),
-                                            dict(type='dense', size=256, activation='relu'),
-                                            dict(type='dense', size=256, activation='relu')
+                                            # dict(type='dense', size=256, activation='relu'),
+                                            # dict(type='dense', size=256, activation='relu')
                                           ],
                                           discount=1.0,
                                           summarizer=dict(
@@ -179,20 +196,20 @@ class Bot(BaseBot):
         for color in Color:
             order[color] = (color.value - self.game_type.trumpf_color.value) % 4
 
-        state = np.zeros((12, CARDS_PER_COLOR), dtype=np.float)
+        state = np.zeros((4*CARDS_PER_COLOR, 3), dtype=np.float)
         action_mask = np.zeros((4, CARDS_PER_COLOR), dtype=np.float)
 
         # already played cards (36 states)
         for card in self.played_cards_in_game:
-            state[order[card.color], card.number - CARD_OFFSET] = 1.0
+            state[order[card.color] * CARDS_PER_COLOR + card.number - CARD_OFFSET, 0] = 1.0
 
         # cards currently on the table (36 states)
         for card in tableCards:
-            state[4 + order[card.color], card.number - CARD_OFFSET] = 1.0
+            state[order[card.color] * CARDS_PER_COLOR + card.number - CARD_OFFSET, 1] = 1.0
 
         # cards in player hand (36 states)
         for card in self.handCards:
-            state[8 + order[card.color], card.number - CARD_OFFSET] = 1.0
+            state[order[card.color] * CARDS_PER_COLOR + card.number - CARD_OFFSET, 2] = 1.0
             if card not in self.rejected_cards:
                 action_mask[order[card.color], card.number - CARD_OFFSET] = 1.0
 
@@ -206,10 +223,16 @@ class Bot(BaseBot):
         # team who currently owns the stich (2 states)
         stich_owner = self.get_stich_owner(tableCards)
 
-        return dict(state=np.concatenate((state.flatten(),
-                                         played_color.flatten(),
-                                         self.out_of_color.flatten(),
-                                          stich_owner)),
+        # return dict(state=dict(cards=state,
+        #                        features=np.concatenate((played_color.flatten(),
+        #                                                 self.out_of_color.flatten(),
+        #                                                 stich_owner))),
+        #             action_mask=action_mask.flatten())
+
+        return dict(cards=state,
+                    features=np.concatenate((played_color.flatten(),
+                                                        self.out_of_color.flatten(),
+                                                        stich_owner)),
                     action_mask=action_mask.flatten())
 
     def get_stich_owner(self, tableCards):
