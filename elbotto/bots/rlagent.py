@@ -90,9 +90,9 @@ class Bot(BaseBot):
                                               [dict(type='retrieve', aggregation='concat',
                                                     tensors=['cards-embedding', 'features-embedding']
                                                ),
-                                               dict(type='dense', size=512, activation='tanh'),
-                                               dict(type='dense', size=256, activation='tanh'),
-                                               dict(type='dense', size=256, activation='tanh')]
+                                               dict(type='dense', size=512, activation='relu'),
+                                               dict(type='dense', size=256, activation='relu'),
+                                               dict(type='dense', size=256, activation='relu')]
                                             # dict(type='dense', size=256, activation='tanh'),
                                             # dict(type='dense', size=256, activation='tanh'),
                                             # dict(type='dense', size=128, activation='tanh'),
