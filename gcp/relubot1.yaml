@@ -1,0 +1,22 @@
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "relubot1"
+  namespace: "default"
+  labels:
+    app: "relubot1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "relubot1"
+  template:
+    metadata:
+      labels:
+        app: "relubot1"
+    spec:
+      containers:
+      - name: "relubot-sha256-1"
+        image: "eu.gcr.io/modular-source-288719/relubot@sha256:8b73f5dec2b3131e6b2a4cf4e0468fa97af925fbdbf82a7162a09cc1756b2f8f"
+        args: ["-n", "bot1", "-rl", "True", "-t", "0", "-m", "TRAIN", "-s", "ws://jasschallenge-service:3000"]

@@ -1,0 +1,22 @@
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "cnnbot1"
+  namespace: "default"
+  labels:
+    app: "cnnbot1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "cnnbot1"
+  template:
+    metadata:
+      labels:
+        app: "cnnbot1"
+    spec:
+      containers:
+      - name: "cnnbot-sha256-1"
+        image: "eu.gcr.io/modular-source-288719/cnnbot@sha256:f43a62e0e97bb4bca3704aa445ff9e3e194bf0114e7965a758072fdadab5822f"
+        args: ["-n", "bot3", "-rl", "True", "-t", "1", "-m", "TRAIN", "-s", "ws://jasschallenge-service:3000"]

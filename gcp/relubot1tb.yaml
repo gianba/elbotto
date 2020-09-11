@@ -1,0 +1,16 @@
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "relubot1-tb"
+  namespace: "default"
+  labels:
+    app: "relubot1"
+spec:
+  ports:
+  - protocol: "TCP"
+    port: 80
+    targetPort: 6006
+  selector:
+    app: "relubot1"
+  type: "LoadBalancer"
+  loadBalancerIP: ""

@@ -1,0 +1,16 @@
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "cnnbot2-tb"
+  namespace: "default"
+  labels:
+    app: "cnnbot2"
+spec:
+  ports:
+  - protocol: "TCP"
+    port: 80
+    targetPort: 6006
+  selector:
+    app: "cnnbot2"
+  type: "LoadBalancer"
+  loadBalancerIP: ""

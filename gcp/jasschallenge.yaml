@@ -1,0 +1,22 @@
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "jasschallenge"
+  namespace: "default"
+  labels:
+    app: "jasschallenge"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "jasschallenge"
+  template:
+    metadata:
+      labels:
+        app: "jasschallenge"
+    spec:
+      containers:
+      - name: "jasschallenge-sha256-1"
+        image: "eu.gcr.io/modular-source-288719/jasschallenge@sha256:3e7c52e8d791c1b5ff351bcaac79ab7bd2bfd730e2f255c1fa1c6c04baca4d0c"
+        ports:
+          - containerPort: 3000
