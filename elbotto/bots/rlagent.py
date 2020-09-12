@@ -82,6 +82,7 @@ class Bot(BaseBot):
                                           network=[
                                               [dict(type='retrieve', tensors=['cards']),
                                                dict(type='conv1d', size=256, window=9, stride=9, padding='valid'),
+                                               dict(type='conv1d', size=256, window=1, stride=1, padding='valid'),
                                                dict(type='flatten'),
                                                dict(type='register', tensor='cards-embedding')],
                                               [dict(type='retrieve', tensors=['features']),
