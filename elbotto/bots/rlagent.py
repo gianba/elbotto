@@ -78,7 +78,12 @@ class Bot(BaseBot):
                                           memory=20000,
                                           batch_size=32,
                                           start_updating=8192,
-                                          exploration=0.1,
+                                          exploration=dict(
+                                            type='decaying', decay='exponential', unit='episodes',
+                                            num_steps=200000, initial_value=0.1, decay_rate=0.5),
+                                          learning_rate=dict(
+                                            type='decaying', decay='exponential', unit='episodes',
+                                            num_steps=100000, initial_value=0.002, decay_rate=0.75),
                                           network=[
                                               [dict(type='retrieve', tensors=['cards']),
                                                dict(type='conv1d', size=256, window=9, stride=9, padding='valid'),
