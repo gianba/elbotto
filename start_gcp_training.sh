@@ -16,6 +16,6 @@ kubectl apply -f gcp/relubot2.yaml
 
 kubectl apply -f gcp/cnnbot1tb.yaml
 kubectl apply -f gcp/cnnbot2tb.yaml
-kubectl apply -f gcp/relubot1tb.yaml
-kubectl apply -f gcp/relubot2tb.yaml
+#kubectl apply -f gcp/relubot1tb.yaml
+#kubectl apply -f gcp/relubot2tb.yaml
 

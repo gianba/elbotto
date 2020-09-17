@@ -37,8 +37,18 @@ def get_states():
         features=dict(type='float', shape=5 * 4 + 2)
     )
 
+def get_trumpf_states():
+    # 4 * CARDS_PER_COLOR for the current hand
+    return dict(
+        cards=dict(type='float', shape=(4, CARDS_PER_COLOR))
+    )
+
 def get_actions():
     return dict(type='int', shape=(), num_values=4 * CARDS_PER_COLOR)
+
+def get_trumpf_actions():
+    # 4 colors or schiaba
+    return dict(type='int', shape=(), num_values=5)
 
 class Bot(BaseBot):
     """
@@ -55,6 +65,7 @@ class Bot(BaseBot):
         self.stich_number = 0
         self.played_cards_in_game = []
         self.rejected_cards = []
+        self.chose_trumpf = False
 
         self.out_of_color = np.zeros((3, 4), dtype=np.float)
 
@@ -65,11 +76,13 @@ class Bot(BaseBot):
         if log:
             self.log_game(output_path)
         model_path = os.path.join(output_path, 'checkpoints')
+        trumpf_path = os.path.join(output_path, 'trumpf-checkpoints')
 
         if mode is Mode.TRAIN:
             os.makedirs(output_path, exist_ok=True)
             if os.path.exists(model_path):
                 self.agent = Agent.load(model_path)
+                self.trumpf_agent = Agent.load(trumpf_path)
             else:
                 self.agent = Agent.create(agent='dqn',
                                           states=get_states(),
@@ -99,18 +112,6 @@ class Bot(BaseBot):
                                                dict(type='dense', size=512, activation='relu'),
                                                dict(type='dense', size=256, activation='relu'),
                                                dict(type='dense', size=256, activation='relu')]
-                                            # dict(type='dense', size=256, activation='tanh'),
-                                            # dict(type='dense', size=256, activation='tanh'),
-                                            # dict(type='dense', size=128, activation='tanh'),
-                                            # dict(type='dense', size=128, activation='tanh')
-                                            # dict(type='dense', size=512, activation='relu'),
-                                            # dict(type='dropout', rate=0.2),
-                                            # dict(type='dense', size=512, activation='relu'),
-                                            # dict(type='dropout', rate=0.2),
-                                            # dict(type='dense', size=256, activation='relu'),
-                                            # dict(type='dropout', rate=0.2),
-                                            # dict(type='dense', size=256, activation='relu'),
-                                            # dict(type='dense', size=256, activation='relu')
                                           ],
                                           discount=1.0,
                                           summarizer=dict(
@@ -118,20 +119,66 @@ class Bot(BaseBot):
                                             labels=['entropy', 'kl-divergence', 'loss', 'reward', 'update-norm']
                                           ),
                                           saver=dict(
-                                            directory=os.path.join(output_path, "checkpoints"),
+                                            directory=model_path,
                                             frequency=SAVE_EPISODES  # save checkpoint every 100 updates
                                           )
                 )
+                self.trumpf_agent = Agent.create(agent='dqn',
+                                      states=get_trumpf_states(),
+                                      actions=get_trumpf_actions(),
+                                      max_episode_timesteps=2,
+                                      memory=500,
+                                      batch_size=32,
+                                      start_updating=200,
+                                      exploration=dict(
+                                          type='decaying', decay='exponential', unit='episodes',
+                                          num_steps=30000, initial_value=0.2, decay_rate=0.75),
+                                      learning_rate=dict(
+                                          type='decaying', decay='exponential', unit='episodes',
+                                          num_steps=30000, initial_value=0.001, decay_rate=0.6),
+                                      network=[
+                                          [dict(type='retrieve', tensors=['cards']),
+                                           dict(type='conv1d', size=64, window=1, stride=1, padding='valid'),
+                                           dict(type='conv1d', size=32, window=1, stride=1, padding='valid'),
+                                           dict(type='flatten'),
+                                           dict(type='dense', size=64, activation='relu')]
+                                      ],
+                                      discount=1.0,
+                                      summarizer=dict(
+                                          directory=os.path.join(output_path, "summary/trumpf"),
+                                          labels=['entropy', 'kl-divergence', 'loss', 'reward', 'update-norm']
+                                      ),
+                                      saver=dict(
+                                          directory=trumpf_path,
+                                          frequency=2
+                                      )
+                )
         else:
             self.agent = Agent.load(model_path)
+            self.trumpf_agent = Agent.load(trumpf_path)
 
-
-    def handle_request_trumpf(self):
-        cnt = Counter()
+    def handle_request_trumpf(self, gschobe):
+        self.chose_trumpf = True
+        hand_cards = np.zeros((4, CARDS_PER_COLOR), dtype=np.float)
         for card in self.handCards:
-            cnt[card.color] += 1
-        most_common_color = cnt.most_common(1)[0][0]
-        return GameType("TRUMPF", most_common_color.name)
+            hand_cards[card.color.value, card.number - CARD_OFFSET] = 1
+
+        action_mask = np.ones(5, dtype=np.float)
+        if gschobe:
+            action_mask[4] = 0
+
+        state = dict(cards=hand_cards,
+                     action_mask=action_mask)
+
+        exploit = (self.mode is Mode.RUN)
+        action = self.trumpf_agent.act(states=state, deterministic=exploit, independent=exploit)
+
+        if action == 4:
+            game_type = GameType("SCHIEBE")
+        else:
+            game_type = GameType("TRUMPF", Color(action).name)
+
+        return game_type
 
     def handle_reject_card(self, card):
         if self.mode is Mode.TRAIN:
@@ -158,11 +205,16 @@ class Bot(BaseBot):
 
         return None
 
-    def handle_game_finished(self):
+    def handle_game_finished(self, round_score):
         self.episode += 1
         self.stich_number = 0
         self.played_cards_in_game = []
         self.out_of_color = np.zeros((3, 4), dtype=np.float)
+        if self.chose_trumpf:
+            if self.mode is Mode.TRAIN:
+                reward = round_score.current_game_points / (257 * self.get_trumpf_factor())
+                self.trumpf_agent.observe(reward=reward, terminal=True)
+            self.chose_trumpf = False
 
     def handle_played_cards(self, played_cards):
         super(Bot, self).handle_played_cards(played_cards)

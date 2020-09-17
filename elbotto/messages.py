@@ -161,7 +161,7 @@ def createBroadcastStich(data):
 def createBroadcastGameFinished(data):
     return dict(
         type = MessageType.BROADCAST_GAME_FINISHED,
-        data = [RoundScore(**score) for score in data]
+        data = [RoundScore(**score) for score in data][0]
     )
 
 

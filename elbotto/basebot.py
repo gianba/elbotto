@@ -85,7 +85,7 @@ class BaseBot(object):
         elif message_type == MessageType.REQUEST_TRUMPF:
             if self.log:
                 logger.warning(message)
-            game_type = self.handle_request_trumpf()
+            game_type = self.handle_request_trumpf(data)
             answer = messages.create(MessageType.CHOOSE_TRUMPF, game_type)
             
         elif message_type == MessageType.REQUEST_CARD:
@@ -105,7 +105,7 @@ class BaseBot(object):
         elif message_type == MessageType.BROADCAST_GAME_FINISHED:
             if self.log:
                 logger.warning(message)
-            self.handle_game_finished()
+            self.handle_game_finished(data)
             self.won_stich_in_game = []
 
         elif message_type == MessageType.BROADCAST_SESSION_JOINED:
@@ -160,7 +160,7 @@ class BaseBot(object):
         # CHALLENGE2017: This removes a handcard if the last played card on the table was one of yours.
         self.update_hand(played_cards)
 
-    def handle_request_trumpf(self):
+    def handle_request_trumpf(self, gschobe):
         # CHALLENGE2017: Ask the brain which gameMode to choose
         return DEFAULT_TRUMPF
 
@@ -172,7 +172,7 @@ class BaseBot(object):
         # Do nothing with that :-)
         pass
 
-    def handle_game_finished(self):
+    def handle_game_finished(self, round_score):
         self.last_round_points = [0, 0]
         pass
 

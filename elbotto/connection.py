@@ -12,7 +12,7 @@ def on_error(ws, error):
     print(error)
 
 def on_close(ws):
-    print("### closed ###")
+    pass
 
 
 class Connection(object):

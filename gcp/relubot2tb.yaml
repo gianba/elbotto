@@ -1,16 +1,16 @@
 apiVersion: "v1"
 kind: "Service"
 metadata:
-  name: "relubot2-tb"
+  name: "rulebot2-tb"
   namespace: "default"
   labels:
-    app: "relubot2"
+    app: "rulebot2"
 spec:
   ports:
   - protocol: "TCP"
     port: 80
     targetPort: 6006
   selector:
-    app: "relubot2"
+    app: "rulebot2"
   type: "LoadBalancer"
   loadBalancerIP: ""
