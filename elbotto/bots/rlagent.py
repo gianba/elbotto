@@ -88,12 +88,13 @@ class Bot(BaseBot):
                                           states=get_states(),
                                           actions=get_actions(),
                                           max_episode_timesteps=50,
-                                          memory=20000,
+                                          memory=50000,
                                           batch_size=32,
+                                          target_sync_frequency=10,
                                           start_updating=8192,
                                           exploration=dict(
                                             type='decaying', decay='exponential', unit='episodes',
-                                            num_steps=200000, initial_value=0.1, decay_rate=0.5),
+                                            num_steps=200000, initial_value=0.2, decay_rate=0.5),
                                           learning_rate=dict(
                                             type='decaying', decay='exponential', unit='episodes',
                                             num_steps=100000, initial_value=0.002, decay_rate=0.75),
@@ -127,12 +128,13 @@ class Bot(BaseBot):
                                       states=get_trumpf_states(),
                                       actions=get_trumpf_actions(),
                                       max_episode_timesteps=2,
-                                      memory=500,
+                                      memory=5000,
                                       batch_size=32,
-                                      start_updating=200,
+                                      target_sync_frequency=10,
+                                      start_updating=2000,
                                       exploration=dict(
                                           type='decaying', decay='exponential', unit='episodes',
-                                          num_steps=30000, initial_value=0.2, decay_rate=0.75),
+                                          num_steps=30000, initial_value=0.4, decay_rate=0.75),
                                       learning_rate=dict(
                                           type='decaying', decay='exponential', unit='episodes',
                                           num_steps=30000, initial_value=0.001, decay_rate=0.6),

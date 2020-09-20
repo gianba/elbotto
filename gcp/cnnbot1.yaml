@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: "cnnbot-sha256-1"
-        image: "eu.gcr.io/modular-source-288719/cnnbot@sha256:f380167319307d0c3098c3ea51e614fc05a71acf7267ea10c125c1602aa424bc"
+        image: "eu.gcr.io/modular-source-288719/cnnbot@sha256:2447eac199d1c25f39252b4f8ec8f08cc5e723c5e8f6470da097767d6a86bb23"
         resources:
           requests:
             cpu: "200m"
