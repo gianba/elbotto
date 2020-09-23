@@ -94,13 +94,13 @@ class Bot(BaseBot):
                                           memory=50000,
                                           batch_size=32,
                                           target_sync_frequency=10,
-                                          start_updating=8192,
+                                          start_updating=10000,
                                           exploration=dict(
                                             type='decaying', decay='exponential', unit='episodes',
-                                            num_steps=200000, initial_value=0.2, decay_rate=0.75),
+                                            num_steps=100000, initial_value=0.2, decay_rate=0.75),
                                           learning_rate=dict(
                                             type='decaying', decay='exponential', unit='episodes',
-                                            num_steps=100000, initial_value=0.002, decay_rate=0.75),
+                                            num_steps=100000, initial_value=0.001, decay_rate=0.75),
                                           network=[
                                               [dict(type='retrieve', tensors=['cards']),
                                                dict(type='conv1d', size=256, window=9, stride=9, padding='valid'),
@@ -131,16 +131,16 @@ class Bot(BaseBot):
                                       states=get_trumpf_states(),
                                       actions=get_trumpf_actions(),
                                       max_episode_timesteps=2,
-                                      memory=5000,
+                                      memory=2000,
                                       batch_size=32,
                                       target_sync_frequency=10,
-                                      start_updating=2000,
+                                      start_updating=200,
                                       exploration=dict(
                                           type='decaying', decay='exponential', unit='episodes',
-                                          num_steps=60000, initial_value=0.2, decay_rate=0.75),
+                                          num_steps=30000, initial_value=0.2, decay_rate=0.75),
                                       learning_rate=dict(
                                           type='decaying', decay='exponential', unit='episodes',
-                                          num_steps=30000, initial_value=0.002, decay_rate=0.75),
+                                          num_steps=30000, initial_value=0.001, decay_rate=0.75),
                                       network=[
                                           [dict(type='retrieve', tensors=['cards']),
                                            dict(type='conv1d', size=64, window=1, stride=1, padding='valid'),
@@ -179,7 +179,7 @@ class Bot(BaseBot):
         self.selected_trumpf = self.trumpf_agent.act(states=state, deterministic=exploit, independent=exploit)
 
         if not gschobe:
-            self.avg_trumpf_selection[self.selected_trumpf] = self.avg_trumpf_selection[self.selected_trumpf] * 1.01
+            self.avg_trumpf_selection[self.selected_trumpf] = self.avg_trumpf_selection[self.selected_trumpf] + 0.01
             self.avg_trumpf_selection = self.avg_trumpf_selection / self.avg_trumpf_selection.sum()
 
         if self.selected_trumpf == 4:
@@ -215,6 +215,7 @@ class Bot(BaseBot):
         return None
 
     def handle_game_finished(self, round_score):
+
         self.episode += 1
         self.stich_number = 0
         self.played_cards_in_game = []
@@ -226,16 +227,16 @@ class Bot(BaseBot):
             current_game_points = round_score[1].current_game_points / self.get_trumpf_factor()
             others_game_points = round_score[0].current_game_points / self.get_trumpf_factor()
 
-        self.avg_game_points[0] = self.avg_game_points[0] * 0.99 + current_game_points * 0.01
-        self.avg_game_points[1] = self.avg_game_points[1] * 0.99 + others_game_points * 0.01
+        self.avg_game_points[0] = self.avg_game_points[0] * 0.998 + current_game_points * 0.002
+        self.avg_game_points[1] = self.avg_game_points[1] * 0.998 + others_game_points * 0.002
 
         if self.chose_trumpf:
             if self.mode is Mode.TRAIN:
                 reward = current_game_points / 257
                 self.trumpf_agent.observe(reward=reward, terminal=True)
             self.chose_trumpf = False
-            self.avg_trumpf_points[self.selected_trumpf] = self.avg_trumpf_points[self.selected_trumpf] * 0.95 \
-                                                           + current_game_points * 0.05
+            self.avg_trumpf_points[self.selected_trumpf] = self.avg_trumpf_points[self.selected_trumpf] * 0.99 \
+                                                           + current_game_points * 0.01
 
     def handle_played_cards(self, played_cards):
         super(Bot, self).handle_played_cards(played_cards)
@@ -247,6 +248,7 @@ class Bot(BaseBot):
     def handle_stich(self, winner, round_points, total_points, played_cards, seat_id):
         self.rejected_cards = []
         self.stich_number += 1
+
         if self.in_my_team(winner):
             reward = round_points / (self.get_trumpf_factor() * 56)
         else:
@@ -267,7 +269,7 @@ class Bot(BaseBot):
 
     def handle_winner_team(self, data):
         self.avg_rejected_per_session = 0.99 * self.avg_rejected_per_session + 0.01 * self.rejected_per_session
-        logger.info('My {:.1f} Their {:.1f} Col_sel {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f} Col_sco {:.1f} {:.1f} {:.1f} {:.1f} {:.1f} Rew: {:.4f} Rej {} (avg: {:.2f}) '.format(self.avg_game_points[0], self.avg_game_points[1], self.avg_trumpf_selection[0], self.avg_trumpf_selection[1], self.avg_trumpf_selection[2], self.avg_trumpf_selection[3], self.avg_trumpf_selection[4], self.avg_trumpf_points[0], self.avg_trumpf_points[1], self.avg_trumpf_points[2], self.avg_trumpf_points[3], self.avg_trumpf_points[4], self.avg_stich_reward, self.rejected_per_session, self.avg_rejected_per_session))
+        logger.info('My {:.1f} Their {:.1f} Rew: {:.4f} Rej {} (avg: {:.2f}) Col_sel {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f} Col_sco {:.1f} {:.1f} {:.1f} {:.1f} {:.1f}'.format(self.avg_game_points[0], self.avg_game_points[1], self.avg_stich_reward, self.rejected_per_session, self.avg_rejected_per_session, self.avg_trumpf_selection[0], self.avg_trumpf_selection[1], self.avg_trumpf_selection[2], self.avg_trumpf_selection[3], self.avg_trumpf_selection[4], self.avg_trumpf_points[0], self.avg_trumpf_points[1], self.avg_trumpf_points[2], self.avg_trumpf_points[3], self.avg_trumpf_points[4]))
         self.rejected_per_session = 0
 
     def _build_state(self, tableCards):
@@ -302,12 +304,6 @@ class Bot(BaseBot):
         # team who currently owns the stich (2 states)
         stich_owner = self.get_stich_owner(tableCards)
 
-        # return dict(state=dict(cards=state,
-        #                        features=np.concatenate((played_color.flatten(),
-        #                                                 self.out_of_color.flatten(),
-        #                                                 stich_owner))),
-        #             action_mask=action_mask.flatten())
-
         return dict(cards=state,
                     features=np.concatenate((played_color.flatten(),
                                                         self.out_of_color.flatten(),
@@ -333,7 +329,8 @@ class Bot(BaseBot):
         return stich_owner
 
     def get_trumpf_factor(self):
-        factor = 1 if self.game_type.trumpf_color in [Color.HEARTS, Color.DIAMONDS] else 2
+        # factor = 1 if self.game_type.trumpf_color in [Color.HEARTS, Color.DIAMONDS] else 2
+        factor = 1
         return factor
 
 

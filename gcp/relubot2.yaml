@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: "rulebot-sha256-1"
-        image: "eu.gcr.io/modular-source-288719/rulebot@sha256:f04f95150d6d77ca21f515e3f27cc8f7783cedce8f77d7042e30322da9aa3bc5"
+        image: "eu.gcr.io/modular-source-288719/rulebot@sha256:bc2a523f9ba388e664f9c3f9902fa1e001ee5fbbf58441a3815bb7af393c8ac6"
         resources:
           requests:
             cpu: "50m"
