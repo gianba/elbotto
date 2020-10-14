@@ -97,13 +97,16 @@ class Bot(BaseBot):
                                           start_updating=10000,
                                           exploration=dict(
                                             type='decaying', decay='exponential', unit='episodes',
-                                            num_steps=100000, initial_value=0.2, decay_rate=0.75),
+                                            num_steps=100000, initial_value=0.2, decay_rate=0.5),
                                           learning_rate=dict(
                                             type='decaying', decay='exponential', unit='episodes',
                                             num_steps=100000, initial_value=0.001, decay_rate=0.75),
+                                          variable_noise=dict(
+                                            type='decaying', decay='exponential', unit='episodes',
+                                            num_steps=100000, initial_value=0.1, decay_rate=0.75),
                                           network=[
                                               [dict(type='retrieve', tensors=['cards']),
-                                               dict(type='conv1d', size=256, window=9, stride=9, padding='valid'),
+                                               dict(type='conv1d', size=512, window=9, stride=9, padding='valid'),
                                                dict(type='conv1d', size=256, window=1, stride=1, padding='valid'),
                                                dict(type='flatten'),
                                                dict(type='register', tensor='cards-embedding')],
@@ -137,15 +140,19 @@ class Bot(BaseBot):
                                       start_updating=200,
                                       exploration=dict(
                                           type='decaying', decay='exponential', unit='episodes',
-                                          num_steps=30000, initial_value=0.2, decay_rate=0.75),
+                                          num_steps=30000, initial_value=0.2, decay_rate=0.5),
                                       learning_rate=dict(
                                           type='decaying', decay='exponential', unit='episodes',
                                           num_steps=30000, initial_value=0.001, decay_rate=0.75),
+                                      variable_noise=dict(
+                                          type='decaying', decay='exponential', unit='episodes',
+                                          num_steps=100000, initial_value=0.1, decay_rate=0.75),
                                       network=[
                                           [dict(type='retrieve', tensors=['cards']),
+                                           dict(type='conv1d', size=128, window=1, stride=1, padding='valid'),
                                            dict(type='conv1d', size=64, window=1, stride=1, padding='valid'),
-                                           dict(type='conv1d', size=32, window=1, stride=1, padding='valid'),
                                            dict(type='flatten'),
+                                           dict(type='dense', size=128, activation='relu'),
                                            dict(type='dense', size=64, activation='relu')]
                                       ],
                                       discount=1.0,
